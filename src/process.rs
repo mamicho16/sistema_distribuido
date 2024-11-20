@@ -1,10 +1,10 @@
 #[derive(Clone)]
-pub struct Proceso {
+pub struct Process {
     pub id: u32,
 }
 
-impl Proceso {
+impl Process {
     pub fn nuevo(id: u32) -> Self {
-        Proceso { id }
+        Process { id }
     }
 }

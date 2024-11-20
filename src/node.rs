@@ -2,16 +2,16 @@ use crate::proceso::Proceso;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub struct Nodo {
+pub struct Node {
     pub id: u32,
     pub capacidad: usize,
     pub procesos: Arc<Mutex<Vec<Proceso>>>,
     pub activo: Arc<Mutex<bool>>,
 }
 
-impl Nodo {
+impl Node {
     pub fn nuevo(id: u32, capacidad: usize) -> Self {
-        Nodo {
+        Node {
             id,
             capacidad,
             procesos: Arc::new(Mutex::new(Vec::new())),

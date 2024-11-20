@@ -1,14 +1,14 @@
 use tokio::sync::Mutex;
 use std::sync::Arc;
 
-pub struct Recurso {
+pub struct Resource {
     pub id: u32,
     disponible: Arc<Mutex<bool>>,
 }
 
-impl Recurso {
+impl Resource {
     pub fn nuevo(id: u32) -> Self {
-        Recurso {
+        Resource {
             id,
             disponible: Arc::new(Mutex::new(true)),
         }
