@@ -1,38 +1,21 @@
-mod nodo;
-mod proceso;
-mod recurso;
-mod red;
+use sistema_distribuido::node::Node;
+use sistema_distribuido::resource::Resources;
+use sistema_distribuido::session::Session;
 
-use crate::red::Red;
-use crate::proceso::Proceso;
+fn main() {
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Crear la red
-    let mut red = Red::nueva();
+    // Create nodes
+    let node1 = Node::new(1, Resources::new(8, 500, 4));
+    let node2 = Node::new(2, Resources::new(8, 500, 4));
+    let node3 = Node::new(3, Resources::new(8, 500, 4));
 
-    // Agregar nodos a la red
-    red.agregar_nodo(1, 3).await;
-    red.agregar_nodo(2, 5).await;
+    // Initialize session
+    let mut session = Session::new(vec![node1, node2, node3], vec![]);
 
-    // Crear procesos
-    let proceso1 = Proceso::nuevo(1);
-    let proceso2 = Proceso::nuevo(2);
+    // Simulate a node detecting a failure and proposing an action
+    let action = session.nodes[0].detect_and_report_failure("Disk failure".to_string());
 
-    // Asignar procesos a los nodos
-    red.asignar_proceso(proceso1).await;
-    red.asignar_proceso(proceso2).await;
+    session.initiate_voting(session.nodes[0].id, action);
 
-    // Mostrar estado de los nodos
-    println!("Estado inicial de los nodos:");
-    red.estado_nodos().await;
-
-    // Simular fallo
-    red.manejar_fallo(1).await;
-
-    // Mostrar estado de los nodos después de fallo
-    println!("\nEstado de los nodos después del fallo:");
-    red.estado_nodos().await;
-
-    Ok(())
+    // The nodes have received the proposal and voted; the action should be executed if consensus is reached
 }
