@@ -28,12 +28,27 @@ impl Session {
 
     pub fn assign_processes(&mut self) {
         for process in &self.processes {
-            let min_node = self.nodes.iter_mut().min_by_key(|node| node.active_processes.len());
+            // Filter nodes that can handle the process's resource requirements
+            let suitable_nodes: Vec<&mut Node> = self.nodes.iter_mut()
+                .filter(|node| node.available_resources.can_allocate(&process.needed_resources))
+                .collect();
 
-            if let Some(node) = min_node {
-                if node.resources.allocate(process.needed_resources.clone()) {
+            // If there are suitable nodes, pick the one with the least number of active processes
+            if let Some(node) = suitable_nodes.into_iter()
+                .min_by_key(|node| node.active_processes.len())
+            {
+                // Allocate resources
+                if node.available_resources.allocate(&process.needed_resources) {
+                    // Assign the process
                     node.active_processes.push(process.clone());
+                    println!("Assigned process {} to node {}", process.id, node.id);
+                } else {
+                    println!("Failed to allocate resources for process {} on node {}", process.id, node.id);
                 }
+            } else {
+                // No suitable node found
+                println!("No available nodes can handle process {} due to resource constraints.", process.id);
+                // Optionally, you might want to queue the process or handle this case differently
             }
         }
     }

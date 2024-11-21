@@ -94,13 +94,30 @@ impl Node {
         }
     }    
 
+    // Complete a process and deallocate its resources
     pub fn complete_process(&mut self, process_id: u32) {
         if let Some(pos) = self.active_processes.iter().position(|p| p.id == process_id) {
             let process = self.active_processes.remove(pos);
-            self.resources.deallocate(process.needed_resources);
+            // Deallocate resources
+            self.available_resources.deallocate(&process.needed_resources);
             println!("Node {} completed process {}", self.id, process_id);
+        } else {
+            println!("Process {} not found on node {}", process_id, self.id);
         }
     }
+
+    // Handle process failure and deallocate resources
+    pub fn handle_process_failure(&mut self, process_id: u32, reason: String) {
+        if let Some(pos) = self.active_processes.iter().position(|p| p.id == process_id) {
+            let process = self.active_processes.remove(pos);
+            // Deallocate resources
+            self.available_resources.deallocate(&process.needed_resources);
+            println!("Process {} failed on node {}: {}", process_id, self.id, reason);
+            // Optionally, notify session or propose an action
+        } else {
+            println!("Process {} not found on node {}", process_id, self.id);
+        }
+    }    
 
     pub fn heartbeat(&mut self) {
         let timestamp = SystemTime::now()
@@ -114,4 +131,12 @@ impl Node {
         self.status = NodeStatus::Halted;
         self.handle_failure(session, reason);
     }
+    
+    pub fn print_status(&self) {
+        println!(
+            "Node {} - Total Resources: {}, Available Resources: {}, Active Processes: {}",
+            self.id, self.total_resources, self.available_resources, self.active_processes.len()
+        );
+    }
+
 }
