@@ -37,6 +37,13 @@ impl Session {
     pub fn remove_node(&mut self, node_id: u32) {
         self.nodes.retain(|node| node.id != node_id);
     }
+    // Reinstalls a failure node (if possible)
+    pub fn try_to_reinstall_node(&mut self, node_id: u32) {
+        println!("Trying to reinstall node {}", node_id);
+        let new_node = Node::new(node_id);
+        self.add_node(new_node);
+        println!("Node {} reinstalled.", node_id);
+    }
 
     // Resource access (Ricart-Agrawala algorithm)    
 
@@ -172,13 +179,15 @@ impl Session {
         let mut waiting_queue: Vec<Process> = vec![];
         for process in self.processes.clone() {
             // Step 1: Find the node with the least active processes
-            let node_id = {
-                let min_node = self.nodes.iter()
-                    .min_by_key(|node| node.active_processes.len());
-                if let Some(node) = min_node {
-                    node.id
-                } else {
-                    panic!("No nodes available");
+            let node_id = match self.nodes.iter()
+                .min_by_key(|node| node.active_processes.len())
+                .map(|node| node.id) 
+            {
+                Some(id) => id,
+                None => {
+                    eprintln!("No nodes available to assign process {}", process.id);
+                    waiting_queue.push(process);
+                    continue;
                 }
             };
 
@@ -189,18 +198,20 @@ impl Session {
                     node.active_processes.push(process.clone());
                     println!("Assigned process {} to node {}", process.id, node.id);
                 } else {
-                    println!("Node with id {} not found", node_id);
+                    eprintln!("Node with id {} not found", node_id);
+                    waiting_queue.push(process);
                 }
             } else {
-                println!(
+                eprintln!(
                     "Failed to assign process {} due to insufficient resources.",
                     process.id
                 );
-                let mut waiting_queue: Vec<Process> = vec![];
+                waiting_queue.push(process);
             }
-            // Re-assign the waiting queue
-            self.processes = waiting_queue;
         }
+
+        // Re-assign the waiting queue
+        self.processes = waiting_queue;
     }
 
     // Initiate voting on an action proposed by a node
@@ -290,33 +301,29 @@ impl Session {
         println!("Handling failure of node {}: {}", node_id, reason);
 
         //Finds the node failure
-        if let Some(node) = self.nodes.iter().find(|n| n.id == node_id) {
-            // Releases the resources occupied by the node's active processes
-            for process in &node.active_processes {
+        if let Some(node_index) = self.nodes.iter().position(|n| n.id == node_id) {
+            // Extract active processes
+            let active_processes = self.nodes[node_index].active_processes.clone();
+        
+            // Deallocate resources
+            for process in &active_processes {
                 self.deallocate_resources(&process.needed_resources);
             }
-    
-            // redistributing active processes
-            for process in node.active_processes.clone() {
+        
+            // Redistribute processes
+            for process in active_processes {
                 self.processes.push(process);
             }
+        
+            // Remove the node
+            self.remove_node(node_id);
+            println!("Node {} deleted. Processes reassigned.", node_id);
+        
+            // Optionally: Try to reinstall the node
+            self.try_to_reinstall_node(node_id);
         }
-
-        // Deletes the node from the system
-        self.remove_node(node_id);
-        println!("Nodo {} deleted. Processes reassigned.", node_id);
-
-        // Opcional: Tries to reinstall the node
-        self.try_to_reinstall_node(node_id);
-        }
-
-        // Reinstalls a failure node (if possible)
-        fn try_to_reinstall_node(&mut self, node_id: u32) {
-            println!("Trying to reinstall node {}", node_id);
-            let new_node = Node::new(node_id);
-            self.add_node(new_node);
-            println!("Node {} reinstalled.", node_id);
-        }
+        
+    }
 
     // Method to get total number of nodes
     pub fn total_nodes(&self) -> usize {
@@ -324,6 +331,7 @@ impl Session {
     }    
 
 }
+
 
 #[cfg(test)]
 mod tests {

@@ -1,8 +1,6 @@
 use crate::process::Process;
 use crate::session::Session;
 use crate::message::{Vote, Action};
-use rand::prelude::*;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap};
 use tokio::time::{sleep, Duration};
 
@@ -97,8 +95,8 @@ impl Node {
     
             // Example: Deallocate memory and CPU resources
             println!(
-                "Resources deallocated for process {}: memory={}, cpu={}",
-                process_id, process.resources.memory, process.resources.cpu
+                "Resources deallocated for process {}: RAM={}MB, Disk Space={}MB, Threads={}",
+                process_id, process.needed_resources.ram, process.needed_resources.disk_space, process.needed_resources.threads
             );
     
             // Notify session or propose action
