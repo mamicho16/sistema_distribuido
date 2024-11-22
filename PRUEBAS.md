@@ -86,12 +86,10 @@ El sistema manejó correctamente el fallo de un nodo y redistribuyó los proceso
 3. Verificar que el sistema integre los nuevos nodos sin interrupciones.
 
 **Resultados Esperados:**  
-![Prueba de Escalabilidad](imagenes/Prueba_escalabilidad.png)
+El sistema debe aceptar los nuevos nodos y redistribuir la carga de procesos sin interrupciones.
 
 **Resultados Obtenidos:**  
-- Se agregaron 3 nuevos nodos a la red.  
-- El sistema aceptó los nuevos nodos sin interrumpir la ejecución de procesos en curso.  
-- Los nodos adicionales fueron integrados correctamente en la red sin afectar la ejecución de procesos.  
+![Prueba de Escalabilidad](imagenes/Prueba_escalabilidad.png) 
 
 **Conclusión:**  
 El sistema es escalable y pudo integrar nuevos nodos sin interrumpir su funcionamiento, demostrando la capacidad de expansión sin afectar el rendimiento.
@@ -111,11 +109,10 @@ El sistema es escalable y pudo integrar nuevos nodos sin interrumpir su funciona
 2. Observar si el sistema redistribuye los procesos excedentes a otros nodos disponibles.
 
 **Resultados Esperados:**  
-![Prueba de Redistribución Automática de Procesos](imagenes/Prueba_restribucion_automatica.png)
+El sistema debe redistribuir automáticamente los procesos al nodo más adecuado.
 
 **Resultados Obtenidos:**  
-- Nodo 3 alcanzó su capacidad máxima de carga.  
-- Los procesos adicionales fueron automáticamente redistribuidos a Nodo 1 y Nodo 2, que tenían mayor capacidad disponible.  
+![Prueba de Escalabilidad](imagenes/Prueba_escalabilidad.png)
 
 **Conclusión:**  
 El sistema redistribuyó correctamente los procesos cuando un nodo alcanzó su capacidad máxima, garantizando un equilibrio en la carga de trabajo entre los nodos.
