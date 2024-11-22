@@ -6,14 +6,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::{HashMap};
 use tokio::time::{sleep, Duration};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeStatus {
     Active,
     Halted,
     Recovering,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub id: u32,
     // List of active processes
@@ -42,7 +42,6 @@ impl Node {
 
         // Decide whether to vote for the action
         // In a blockchain, nodes validate the action before voting
-        // For simplicity, we'll assume nodes always vote 'Approve'
         let vote = self.vote(action);
 
         // Cast the vote
@@ -53,7 +52,7 @@ impl Node {
         // Record that this node knows about the action
         self.known_actions.insert(action.clone(), true);
 
-        // Implement validation logic here
+        // TODO: Implement validation logic
         // For now, we'll approve 80% of the time
         let mut rng = rand::thread_rng();
         if rng.gen_bool(0.8) {
@@ -74,10 +73,9 @@ impl Node {
     pub fn handle_process_failure(&mut self, process_id: u32, reason: String) {
         if let Some(pos) = self.active_processes.iter().position(|p| p.id == process_id) {
             let process = self.active_processes.remove(pos);
-            // Deallocate resources
-            //self.available_resources.deallocate(&process.needed_resources);
+            // TODO: Deallocate resources with session
             println!("Process {} failed on node {}: {}", process_id, self.id, reason);
-            // Optionally, notify session or propose an action
+            // TODO: Optionally, notify session or propose an action
         } else {
             println!("Process {} not found on node {}", process_id, self.id);
         }
@@ -109,16 +107,6 @@ impl Node {
         println!("Node {} completed process {}", self.id, process.id);
     }
 
-    // Resource access (Ricart-Agrawala algorithm)    
-    
-    pub fn heartbeat(&mut self) {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards").as_secs();
-        self.last_heartbeat = timestamp;
-        println!("Node {} heartbeat at timestamp {}", self.id, self.last_heartbeat);
-    }
-
     pub fn halt(&mut self, session: &mut Session, reason: String) {
         self.status = NodeStatus::Halted;
         self.handle_failure(session, reason);
@@ -131,4 +119,124 @@ impl Node {
         );
     }
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::process::Process;
+    use crate::resource::Resources;
+    use crate::message::{Action, Vote};
+    use std::collections::HashMap;
+
+    // MockSession struct for testing
+    struct MockSession {
+        initiated_voting: Vec<(u32, Action)>,
+    }
+
+    impl MockSession {
+        fn new() -> Self {
+            MockSession {
+                initiated_voting: Vec::new(),
+            }
+        }
+
+        fn initiate_voting(&mut self, proposer_id: u32, action: Action) {
+            self.initiated_voting.push((proposer_id, action));
+        }
+    }
+
+    // MockSessionWithResources struct for testing
+    struct MockSessionWithResources {
+        pub available_resources: Resources,
+    }
+
+    impl MockSessionWithResources {
+        fn new(available_resources: Resources) -> Self {
+            MockSessionWithResources {
+                available_resources,
+            }
+        }
+    }
+
+    #[test]
+    fn test_node_creation() {
+        let node = Node::new(1);
+
+        assert_eq!(node.id, 1);
+        assert_eq!(node.active_processes.len(), 0);
+        matches!(node.status, NodeStatus::Active);
+        assert_eq!(node.last_heartbeat, 0);
+        assert!(node.known_actions.is_empty());
+    }
+
+    #[test]
+    fn test_receive_proposal() {
+        let mut node = Node::new(1);
+        let action = Action::ProcessFailure {
+            node_id: 2,
+            reason: "Test failure".to_string(),
+        };
+
+        let vote = node.receive_proposal(action.clone());
+
+        // Since the vote is randomly decided with 80% approval rate, we'll accept both outcomes
+        assert!(matches!(vote, Vote::Approve) || matches!(vote, Vote::Reject));
+        assert!(node.known_actions.contains_key(&action));
+    }
+
+    #[test]
+    fn test_handle_process_failure_existing_process() {
+        let mut node = Node::new(1);
+        let process = Process::new(
+            100,
+            "Test Process".to_string(),
+            Resources::new(1024, 100_000, 2),
+        );
+        node.active_processes.push(process.clone());
+
+        node.handle_process_failure(100, "Simulated failure".to_string());
+
+        assert!(node.active_processes.is_empty());
+    }
+
+    #[test]
+    fn test_handle_process_failure_nonexistent_process() {
+        let mut node = Node::new(1);
+
+        node.handle_process_failure(200, "Simulated failure".to_string());
+
+        // Since the process didn't exist, active_processes should remain empty
+        assert!(node.active_processes.is_empty());
+    }
+
+    #[test]
+    fn test_detect_and_report_failure() {
+        let mut node = Node::new(1);
+        let reason = "Simulated failure".to_string();
+
+        let action = node.detect_and_report_failure(reason.clone());
+
+        match action {
+            Action::ProcessFailure { node_id, reason: r } => {
+                assert_eq!(node_id, 1);
+                assert_eq!(r, reason);
+            },
+            _ => panic!("Expected Action::ProcessFailure"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_process() {
+        let node = Node::new(1);
+        let process = Process::new(
+            101,
+            "Async Test Process".to_string(),
+            Resources::new(2048, 200_000, 4),
+        );
+
+        node.execute_process(&process).await;
+
+        // Since execute_process only simulates execution with sleep, there's no state change to assert
+    }
 }

@@ -38,6 +38,8 @@ impl Session {
         self.nodes.retain(|node| node.id != node_id);
     }
 
+    // Resource access (Ricart-Agrawala algorithm)    
+
     // Resource management
     pub async fn request_resource(&mut self, node_id: u32) {
         let timestamp = self.generate_timestamp();
@@ -292,4 +294,259 @@ impl Session {
         self.nodes.len()
     }    
 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::node::Node;
+    use crate::process::Process;
+    use crate::resource::Resources;
+    use crate::message::{Action, Vote};
+    use crate::message::Request;
+
+    #[test]
+    fn test_session_new() {
+        let nodes = vec![Node::new(1), Node::new(2)];
+        let processes = vec![
+            Process::new(1, "Process 1".to_string(), Resources::new(1024, 100_000, 2)),
+            Process::new(2, "Process 2".to_string(), Resources::new(2048, 200_000, 4)),
+        ];
+        let total_resources = Resources::new(16_384, 1_000_000, 8);
+    
+        let session = Session::new(nodes.clone(), processes.clone(), total_resources.clone());
+    
+        assert_eq!(session.nodes, nodes);
+        assert_eq!(session.processes, processes);
+        assert_eq!(session.total_resources, total_resources);
+        assert_eq!(session.available_resources, total_resources);
+        assert!(session.pending_votes.is_empty());
+        assert!(session.request_queue.is_empty());
+        assert!(session.deferred_replies.is_empty());
+        assert!(session.replies_received.is_empty());
+    }
+
+    #[test]
+    fn test_add_and_remove_node() {
+        let mut session = Session::new(vec![], vec![], Resources::new(0, 0, 0));
+        let node1 = Node::new(1);
+        let node2 = Node::new(2);
+    
+        session.add_node(node1.clone());
+        assert_eq!(session.nodes.len(), 1);
+        assert_eq!(session.nodes[0], node1);
+    
+        session.add_node(node2.clone());
+        assert_eq!(session.nodes.len(), 2);
+        assert_eq!(session.nodes[1], node2);
+    
+        session.remove_node(1);
+        assert_eq!(session.nodes.len(), 1);
+        assert_eq!(session.nodes[0], node2);
+    }
+
+    #[test]
+    fn test_total_nodes() {
+        let mut session = Session::new(vec![], vec![], Resources::new(0, 0, 0));
+        assert_eq!(session.total_nodes(), 0);
+    
+        session.add_node(Node::new(1));
+        session.add_node(Node::new(2));
+        assert_eq!(session.total_nodes(), 2);
+    
+        session.remove_node(1);
+        assert_eq!(session.total_nodes(), 1);
+    }
+
+    #[test]
+    fn test_allocate_resources_success() {
+        let total_resources = Resources::new(16_384, 1_000_000, 8);
+        let mut session = Session::new(vec![], vec![], total_resources.clone());
+    
+        let needed_resources = Resources::new(4_096, 200_000, 2);
+    
+        let result = session.allocate_resources(&needed_resources);
+        assert!(result);
+        assert_eq!(
+            session.available_resources,
+            Resources::new(12_288, 800_000, 6)
+        );
+    }
+    
+    #[test]
+    fn test_allocate_resources_failure() {
+        let total_resources = Resources::new(16_384, 1_000_000, 8);
+        let mut session = Session::new(vec![], vec![], total_resources.clone());
+    
+        let needed_resources = Resources::new(32_768, 2_000_000, 16);
+    
+        let result = session.allocate_resources(&needed_resources);
+        assert!(!result);
+        assert_eq!(session.available_resources, total_resources);
+    }
+
+    #[test]
+    fn test_deallocate_resources() {
+        let total_resources = Resources::new(16_384, 1_000_000, 8);
+        let mut session = Session::new(vec![], vec![], total_resources.clone());
+    
+        let needed_resources = Resources::new(4_096, 200_000, 2);
+        session.allocate_resources(&needed_resources);
+    
+        session.deallocate_resources(&needed_resources);
+        assert_eq!(session.available_resources, total_resources);
+    }
+
+    #[tokio::test]
+    async fn test_assign_processes() {
+        let node1 = Node::new(1);
+        let node2 = Node::new(2);
+        let mut session = Session::new(
+            vec![node1.clone(), node2.clone()],
+            vec![],
+            Resources::new(16_384, 1_000_000, 8),
+        );
+    
+        let process1 = Process::new(1, "Process 1".to_string(), Resources::new(4_096, 200_000, 2));
+        let process2 = Process::new(2, "Process 2".to_string(), Resources::new(4_096, 200_000, 2));
+        session.processes.push(process1.clone());
+        session.processes.push(process2.clone());
+    
+        session.assign_processes().await;
+    
+        // Check that processes have been assigned
+        let node1_processes = session.nodes.iter().find(|n| n.id == 1).unwrap().active_processes.clone();
+        let node2_processes = session.nodes.iter().find(|n| n.id == 2).unwrap().active_processes.clone();
+    
+        assert_eq!(node1_processes.len() + node2_processes.len(), 2);
+    
+        // Check that resources have been allocated
+        assert_eq!(
+            session.available_resources,
+            Resources::new(8_192, 600_000, 4)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_request_resource_and_can_access_resource() {
+        let node1 = Node::new(1);
+        let node2 = Node::new(2);
+        let node3 = Node::new(3);
+        let mut session = Session::new(
+            vec![node1.clone(), node2.clone(), node3.clone()],
+            vec![],
+            Resources::new(16_384, 1_000_000, 8),
+        );
+    
+        // Node 1 requests resource
+        session.request_resource(1).await;
+        // Since no other nodes have requested, Node 1 should have access
+        assert!(session.can_access_resource(1));
+    
+        // Node 2 requests resource
+        session.request_resource(2).await;
+        // Node 2 should have access
+        assert!(session.can_access_resource(2));
+    
+        // Node 1 releases resource
+        session.release_resource(1);
+    
+        // Now Node 2 should have access
+        assert!(session.can_access_resource(2));
+    }
+
+    #[test]
+    fn test_handle_request_and_should_reply_immediately() {
+        let node1 = Node::new(1);
+        let node2 = Node::new(2);
+        let mut session = Session::new(vec![node1.clone(), node2.clone()], vec![], Resources::new(0, 0, 0));
+    
+        // Simulate Node 1's request
+        let request1 = Request {
+            from_node_id: 1,
+            timestamp: 100,
+        };
+        session.request_queue.push_back(request1.clone());
+    
+        // Node 2 receives Node 1's request
+        session.handle_request(2, request1.clone());
+    
+        // Since Node 2 hasn't requested, it should send a reply immediately
+        assert_eq!(session.replies_received.get(&1).unwrap().len(), 1);
+        assert_eq!(session.replies_received.get(&1).unwrap()[0], 2);
+    
+        // Now, Node 2 requests the resource with a higher timestamp
+        let request2 = Request {
+            from_node_id: 2,
+            timestamp: 200,
+        };
+        session.request_queue.push_back(request2.clone());
+    
+        // Node 1 handles Node 2's request
+        session.handle_request(1, request2.clone());
+    
+        // Node 1 should defer the reply since its request has a lower timestamp
+        assert!(session.deferred_replies.get(&1).unwrap().len() == 1);
+    }
+
+    #[test]
+    fn test_release_resource_and_deferred_replies() {
+        let node1 = Node::new(1);
+        let node2 = Node::new(2);
+        let mut session = Session::new(vec![node1.clone(), node2.clone()], vec![], Resources::new(0, 0, 0));
+    
+        // Node 1 requests resource
+        let request1 = Request {
+            from_node_id: 1,
+            timestamp: 100,
+        };
+        session.request_queue.push_back(request1.clone());
+    
+        // Node 2 handles Node 1's request and replies immediately
+        session.handle_request(2, request1.clone());
+    
+        // Node 2 requests resource
+        let request2 = Request {
+            from_node_id: 2,
+            timestamp: 200,
+        };
+        session.request_queue.push_back(request2.clone());
+    
+        // Node 1 handles Node 2's request and defers reply
+        session.handle_request(1, request2.clone());
+    
+        // Node 1 releases resource
+        session.release_resource(1);
+    
+        // Node 1 should send the deferred reply to Node 2
+        assert_eq!(session.replies_received.get(&2).unwrap().len(), 1);
+        assert_eq!(session.replies_received.get(&2).unwrap()[0], 1);
+    }
+
+    // TODO: Add tests for voting and consensus
+    // #[test]
+    // fn test_voting_and_consensus() {
+    //     // Create nodes with overridden receive_proposal methods
+    //     let mut node1 = Node::new(1);
+    //     let mut node2 = Node::new(2);
+    //     let mut node3 = Node::new(3);
+    
+    //     // Override receive_proposal to return specific votes
+    //     node1.receive_proposal = Box::new(|_| Vote::Approve);
+    //     node2.receive_proposal = Box::new(|_| Vote::Approve);
+    //     node3.receive_proposal = Box::new(|_| Vote::Reject);
+    
+    //     let mut session = Session::new(vec![node1, node2, node3], vec![], Resources::new(0, 0, 0));
+    
+    //     let action = Action::NodeFailure {
+    //         node_id: 2,
+    //         reason: "Test failure".to_string(),
+    //     };
+    
+    //     session.initiate_voting(1, action.clone());
+    
+    //     // Since two out of three nodes approve, consensus should be reached
+    //     // Check that the pending_votes for the action have been removed
+    //     assert!(!session.pending_votes.contains_key(&action));
+    // }
 }

@@ -16,16 +16,3 @@ pub struct Request {
     pub from_node_id: u32,
     pub timestamp: u64,
 }
-
-#[derive(Clone, Debug)]
-pub enum Message {
-    Request {
-        from_node_id: u32,
-        timestamp: u64,
-        resource_id: String,
-    },
-    Reply {
-        from_node_id: u32,
-        timestamp: u64,
-    },
-}
