@@ -38,6 +38,7 @@ impl Resources {
         self.disk_space += released.disk_space;
         self.threads += released.threads;
     }
+
 }
 
 impl fmt::Display for Resources {
