@@ -37,6 +37,7 @@ impl Session {
     pub fn remove_node(&mut self, node_id: u32) {
         self.nodes.retain(|node| node.id != node_id);
     }
+
     // Reinstalls a failure node (if possible)
     pub fn try_to_reinstall_node(&mut self, node_id: u32) {
         println!("Trying to reinstall node {}", node_id);
@@ -287,7 +288,7 @@ impl Session {
             },
             Action::RedistributeProcess { process_id } => {
                 println!("Executing RedistributeProcess action for process {}", process_id);
-                // Implement redistribution logic here
+                // TODO: Implement redistribution logic here
             },
             Action::NodeFailure { node_id, reason } => {
                 println!("Executing NodeFailure action for node {}: {}", node_id, reason);
@@ -297,7 +298,7 @@ impl Session {
         }
     }
 
-    fn handle_node_failure(&mut self, node_id: u32, reason: String) {
+    pub fn handle_node_failure(&mut self, node_id: u32, reason: String) {
         println!("Handling failure of node {}: {}", node_id, reason);
 
         //Finds the node failure
