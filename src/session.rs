@@ -169,6 +169,7 @@ impl Session {
     }    
 
     pub async fn assign_processes(&mut self) {
+        let mut waiting_queue: Vec<Process> = vec![];
         for process in self.processes.clone() {
             // Step 1: Find the node with the least active processes
             let node_id = {
@@ -195,8 +196,10 @@ impl Session {
                     "Failed to assign process {} due to insufficient resources.",
                     process.id
                 );
-                // Optionally, handle this case (e.g., add to waiting queue)
+                let mut waiting_queue: Vec<Process> = vec![];
             }
+            // Re-assign the waiting queue
+            self.processes = waiting_queue;
         }
     }
 
@@ -285,9 +288,35 @@ impl Session {
 
     fn handle_node_failure(&mut self, node_id: u32, reason: String) {
         println!("Handling failure of node {}: {}", node_id, reason);
+
+        //Finds the node failure
+        if let Some(node) = self.nodes.iter().find(|n| n.id == node_id) {
+            // Releases the resources occupied by the node's active processes
+            for process in &node.active_processes {
+                self.deallocate_resources(&process.needed_resources);
+            }
+    
+            // redistributing active processes
+            for process in node.active_processes.clone() {
+                self.processes.push(process);
+            }
+        }
+
+        // Deletes the node from the system
         self.remove_node(node_id);
-        // Additional failure handling logic...
-    }
+        println!("Nodo {} deleted. Processes reassigned.", node_id);
+
+        // Opcional: Tries to reinstall the node
+        self.try_to_reinstall_node(node_id);
+        }
+
+        // Reinstalls a failure node (if possible)
+        fn try_to_reinstall_node(&mut self, node_id: u32) {
+            println!("Trying to reinstall node {}", node_id);
+            let new_node = Node::new(node_id);
+            self.add_node(new_node);
+            println!("Node {} reinstalled.", node_id);
+        }
 
     // Method to get total number of nodes
     pub fn total_nodes(&self) -> usize {
