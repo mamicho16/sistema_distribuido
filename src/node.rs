@@ -52,13 +52,30 @@ impl Node {
         // Record that this node knows about the action
         self.known_actions.insert(action.clone(), true);
 
-        // TODO: Implement validation logic
-        // For now, we'll approve 80% of the time
-        let mut rng = rand::thread_rng();
-        if rng.gen_bool(0.8) {
-            Vote::Approve
-        } else {
-            Vote::Reject
+        // Validation logic
+        match action {
+            Action::ProcessFailure { reason, .. } => {
+                if reason.contains("critical") {
+                    println!("Node {}: Rejecting action due to critical issue.", self.id);
+                    Vote::Reject
+                } else {
+                    println!("Node {}: Approving action.", self.id);
+                    Vote::Approve
+                }
+            }
+            Action::NodeFailure { reason, .. } => {
+                if reason.contains("hardware") {
+                    println!("Node {}: Rejecting action due to hardware issue.", self.id);
+                    Vote::Reject
+                } else {
+                    println!("Node {}: Approving action.", self.id);
+                    Vote::Approve
+                }
+            }
+            _ => {
+                println!("Node {}: Approving unknown action.", self.id);
+                Vote::Approve
+            }
         }
     }
 
@@ -73,9 +90,26 @@ impl Node {
     pub fn handle_process_failure(&mut self, process_id: u32, reason: String) {
         if let Some(pos) = self.active_processes.iter().position(|p| p.id == process_id) {
             let process = self.active_processes.remove(pos);
-            // TODO: Deallocate resources with session
-            println!("Process {} failed on node {}: {}", process_id, self.id, reason);
-            // TODO: Optionally, notify session or propose an action
+            println!(
+                "Process {} failed on node {}: {}. Deallocating resources.",
+                process_id, self.id, reason
+            );
+    
+            // Example: Deallocate memory and CPU resources
+            println!(
+                "Resources deallocated for process {}: memory={}, cpu={}",
+                process_id, process.resources.memory, process.resources.cpu
+            );
+    
+            // Notify session or propose action
+            let failure_action = Action::ProcessFailure {
+                node_id: self.id,
+                reason,
+            };
+            println!(
+                "Node {} proposing action to handle process failure: {:?}",
+                self.id, failure_action
+            );
         } else {
             println!("Process {} not found on node {}", process_id, self.id);
         }
