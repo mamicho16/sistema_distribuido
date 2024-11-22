@@ -1,6 +1,6 @@
 use crate::resource::Resources;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Process {
     pub id: u32,
     pub task: String,

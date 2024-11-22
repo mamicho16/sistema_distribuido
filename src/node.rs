@@ -1,34 +1,35 @@
 use crate::process::Process;
-use crate::resource::Resources;
 use crate::session::Session;
 use crate::message::{Vote, Action};
 use rand::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::collections::HashMap;
+use std::collections::{HashMap};
+use tokio::time::{sleep, Duration};
 
+#[derive(Clone, Debug)]
 pub enum NodeStatus {
     Active,
     Halted,
     Recovering,
 }
 
+#[derive(Clone, Debug)]
 pub struct Node {
     pub id: u32,
+    // List of active processes
     pub active_processes: Vec<Process>,
-    pub total_resources: Resources,
-    pub available_resources: Resources,
+    pub timestamp: u64,
     pub status: NodeStatus,
     pub last_heartbeat: u64,
     pub known_actions: HashMap<Action, bool>,
 }
 
 impl Node {
-    pub fn new(id: u32, resources: Resources) -> Self {
+    pub fn new(id: u32) -> Self {
         Node {
             id,
             active_processes: Vec::new(),
-            total_resources: resources.clone(),
-            available_resources: resources,
+            timestamp: 0,
             status: NodeStatus::Active,
             last_heartbeat: 0,
             known_actions: HashMap::new(),
@@ -62,19 +63,25 @@ impl Node {
         }
     }
 
-    fn validate_action(&self, action: &Action) -> bool {
-        // Implement validation logic here
-        // For now, randomly approve or reject
-        let mut rng = rand::thread_rng();
-        rng.gen_bool(0.8) // 80% chance to approve
-    }
-
     pub fn propose_action(&mut self, session: &mut Session, action: Action) {
         println!("Node {} is proposing action {:?}", self.id, action);
 
         // Start the voting process
         session.initiate_voting(self.id, action);
-    }
+    } 
+
+    // Handle process failure and deallocate resources
+    pub fn handle_process_failure(&mut self, process_id: u32, reason: String) {
+        if let Some(pos) = self.active_processes.iter().position(|p| p.id == process_id) {
+            let process = self.active_processes.remove(pos);
+            // Deallocate resources
+            //self.available_resources.deallocate(&process.needed_resources);
+            println!("Process {} failed on node {}: {}", process_id, self.id, reason);
+            // Optionally, notify session or propose an action
+        } else {
+            println!("Process {} not found on node {}", process_id, self.id);
+        }
+    }        
 
     pub fn handle_failure(&self, session: &mut Session, reason: String) {
         println!("Node {} detected a failure: {}", self.id, reason);
@@ -92,33 +99,18 @@ impl Node {
             node_id: self.id,
             reason,
         }
-    }    
+    }   
 
-    // Complete a process and deallocate its resources
-    pub fn complete_process(&mut self, process_id: u32) {
-        if let Some(pos) = self.active_processes.iter().position(|p| p.id == process_id) {
-            let process = self.active_processes.remove(pos);
-            // Deallocate resources
-            self.available_resources.deallocate(&process.needed_resources);
-            println!("Node {} completed process {}", self.id, process_id);
-        } else {
-            println!("Process {} not found on node {}", process_id, self.id);
-        }
+    // Simulate process execution
+    pub async fn execute_process(&self, process: &Process) {
+        println!("Node {} is processing {}", self.id, process.task);
+        // Simulate some work
+        sleep(Duration::from_secs(1)).await;
+        println!("Node {} completed process {}", self.id, process.id);
     }
 
-    // Handle process failure and deallocate resources
-    pub fn handle_process_failure(&mut self, process_id: u32, reason: String) {
-        if let Some(pos) = self.active_processes.iter().position(|p| p.id == process_id) {
-            let process = self.active_processes.remove(pos);
-            // Deallocate resources
-            self.available_resources.deallocate(&process.needed_resources);
-            println!("Process {} failed on node {}: {}", process_id, self.id, reason);
-            // Optionally, notify session or propose an action
-        } else {
-            println!("Process {} not found on node {}", process_id, self.id);
-        }
-    }    
-
+    // Resource access (Ricart-Agrawala algorithm)    
+    
     pub fn heartbeat(&mut self) {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -132,10 +124,10 @@ impl Node {
         self.handle_failure(session, reason);
     }
     
-    pub fn print_status(&self) {
+    pub fn print_status(&self, session: &Session) {
         println!(
-            "Node {} - Total Resources: {}, Available Resources: {}, Active Processes: {}",
-            self.id, self.total_resources, self.available_resources, self.active_processes.len()
+            "Node {} - Available Resources: {}, Active Processes: {}",
+            self.id, session.available_resources, self.active_processes.len()
         );
     }
 
